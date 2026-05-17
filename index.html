@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>shekerFND // LINK STATION</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg-0: #0a0908;
+    --kuka-orange: #ff6a00;
+    --kuka-orange-deep: #c44300;
+    --kuka-yellow: #ffb800;
+    --text: #e8e3dc;
+    --text-dim: #888278;
+    --grid: rgba(255, 106, 0, 0.05);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg-0);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    cursor: crosshair;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.75) 100%);
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  /* Container in middle layer */
+  .container {
+    position: relative;
+    z-index: 4;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    pointer-events: none;
+  }
+
+  /* Canvas on top, but pointer-events: none so links remain clickable */
+  #robotCanvas {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    z-index: 20;
+    pointer-events: none;
+  }
+
+  .hud {
+    position: fixed; z-index: 30;
+    font-size: 10px; letter-spacing: 0.2em;
+    color: var(--kuka-orange);
+    line-height: 1.8;
+    pointer-events: none;
+  }
+  .hud .label { color: var(--text-dim); }
+  .hud .val { color: var(--kuka-yellow); }
+  .hud-tl { top: 24px; left: 24px; }
+  .hud-tr { top: 24px; right: 24px; text-align: right; }
+  .hud-bl { bottom: 24px; left: 24px; font-size: 9px; color: var(--text-dim); letter-spacing: 0.3em; }
+  .hud-br { bottom: 24px; right: 24px; font-size: 9px; color: var(--text-dim); letter-spacing: 0.3em; text-align: right; }
+
+  .dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    background: #00ff66; border-radius: 50%;
+    margin-right: 6px;
+    box-shadow: 0 0 8px #00ff66;
+    animation: pulse 1.5s infinite;
+    vertical-align: middle;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 28px;
+    pointer-events: auto;
+  }
+
+  .id-tag {
+    display: inline-block;
+    font-size: 10px;
+    letter-spacing: 0.4em;
+    color: var(--kuka-orange);
+    padding: 4px 12px;
+    border: 1px solid var(--kuka-orange);
+    margin-bottom: 14px;
+    background: rgba(255, 106, 0, 0.08);
+  }
+
+  .title {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    font-size: clamp(32px, 5vw, 52px);
+    letter-spacing: 0.05em;
+    color: var(--text);
+    text-shadow: 0 0 20px rgba(255, 106, 0, 0.3);
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  .title span { color: var(--kuka-orange); }
+
+  .subtitle {
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+
+  .panel {
+    width: min(420px, 90vw);
+    background: rgba(20, 17, 15, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 106, 0, 0.25);
+    border-radius: 2px;
+    padding: 20px;
+    pointer-events: auto;
+    position: relative;
+  }
+
+  .panel::before, .panel::after {
+    content: '';
+    position: absolute;
+    width: 14px; height: 14px;
+    border: 2px solid var(--kuka-orange);
+  }
+  .panel::before {
+    top: -2px; left: -2px;
+    border-right: none; border-bottom: none;
+  }
+  .panel::after {
+    bottom: -2px; right: -2px;
+    border-left: none; border-top: none;
+  }
+
+  .panel-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed rgba(255, 106, 0, 0.2);
+  }
+  .panel-header .right { color: var(--kuka-yellow); }
+
+  .link {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    background: rgba(42, 40, 38, 0.55);
+    border: 1px solid rgba(138, 133, 128, 0.15);
+    color: var(--text);
+    text-decoration: none;
+    font-size: 13px;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    position: relative;
+    cursor: pointer;
+  }
+  .link:last-of-type { margin-bottom: 0; }
+
+  .link::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--kuka-orange);
+    transform: scaleY(0);
+    transition: transform 0.2s ease;
+  }
+
+  .link:hover {
+    background: rgba(255, 106, 0, 0.1);
+    border-color: var(--kuka-orange);
+    transform: translateX(4px);
+  }
+  .link:hover::before { transform: scaleY(1); }
+  .link:active { transform: translateX(4px) scale(0.98); }
+
+  .link-icon {
+    width: 22px; height: 22px;
+    flex-shrink: 0;
+    fill: currentColor;
+    color: var(--kuka-orange);
+  }
+
+  .link-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .link-name { font-size: 13px; color: var(--text); }
+  .link-handle {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    margin-top: 2px;
+  }
+
+  .link-arrow {
+    font-size: 14px;
+    color: var(--text-dim);
+    transition: all 0.2s ease;
+  }
+  .link:hover .link-arrow {
+    color: var(--kuka-orange);
+    transform: translateX(2px);
+  }
+
+  .stripe {
+    height: 8px;
+    background: repeating-linear-gradient(
+      45deg,
+      var(--kuka-yellow) 0,
+      var(--kuka-yellow) 10px,
+      #1a1612 10px,
+      #1a1612 20px
+    );
+    margin-top: 16px;
+    opacity: 0.6;
+  }
+
+  @media (max-width: 640px) {
+    .hud-tl, .hud-tr { font-size: 9px; }
+    .hud-bl, .hud-br { font-size: 8px; }
+    .panel { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="robotCanvas"></canvas>
+
+<div class="hud hud-tl">
+  <div><span class="label">SYS:</span> <span class="val">KR-4DOF</span></div>
+  <div><span class="label">MODE:</span> STAMP-IK</div>
+  <div><span class="label">EE:</span> <span id="eePos">000, 000</span></div>
+</div>
+
+<div class="hud hud-tr">
+  <div><span class="dot"></span><span class="val">ONLINE</span></div>
+  <div><span class="label">HEAD:</span> <span id="gripState" class="val">IDLE</span></div>
+  <div><span class="label">STAMPS:</span> <span id="stampCount" class="val">000</span></div>
+</div>
+
+<div class="hud hud-bl">// LINK_STATION_v2.6 // EST.2026</div>
+<div class="hud hud-br">SHEKERFND // ASABEES</div>
+
+<div class="container">
+  <div class="header">
+    <div class="id-tag">// OPERATOR: SHEKERFND</div>
+    <h1 class="title">LINK<span>::</span>STATION</h1>
+    <div class="subtitle">— Click to mark · select node to connect —</div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <span>[ AVAILABLE_NODES ]</span>
+      <span class="right">06 ACTIVE</span>
+    </div>
+
+    <a href="#" class="link" target="_blank" rel="noopener">
+      <svg class="link-icon" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+      <div class="link-text">
+        <span class="link-name">Instagram</span>
+        <span class="link-handle">https://www.instagram.com/ase.fnd/</span>
+      </div>
+      <span class="link-arrow">→</span>
+    </a>
+
+    <a href="#" class="link" target="_blank" rel="noopener">
+      <svg class="link-icon" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+      <div class="link-text">
+        <span class="link-name">YouTube</span>
+        <span class="link-handle">@shekerfnd</span>
+      </div>
+      <span class="link-arrow">→</span>
+    </a>
+
+    <a href="#" class="link" target="_blank" rel="noopener">
+      <svg class="link-icon" viewBox="0 0 24 24"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+      <div class="link-text">
+        <span class="link-name">GitHub</span>
+        <span class="link-handle">/shekerfnd</span>
+      </div>
+      <span class="link-arrow">→</span>
+    </a>
+
+    <a href="#" class="link" target="_blank" rel="noopener">
+      <svg class="link-icon" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.063 2.063 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+      <div class="link-text">
+        <span class="link-name">LinkedIn</span>
+        <span class="link-handle">/in/shekerfnd</span>
+      </div>
+      <span class="link-arrow">→</span>
+    </a>
+
+    <a href="#" class="link" target="_blank" rel="noopener">
+      <svg class="link-icon" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+      <div class="link-text">
+        <span class="link-name">X / Twitter</span>
+        <span class="link-handle">@shekerfnd</span>
+      </div>
+      <span class="link-arrow">→</span>
+    </a>
+
+    <a href="mailto:#" class="link">
+      <svg class="link-icon" viewBox="0 0 24 24"><path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/></svg>
+      <div class="link-text">
+        <span class="link-name">E-Mail</span>
+        <span class="link-handle">contact@</span>
+      </div>
+      <span class="link-arrow">→</span>
+    </a>
+
+    <div class="stripe"></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   4-DOF ARM + PNEUMATIC STAMPING HEAD
+   ------------------------------------------------------------
+   Layer architecture:
+     z=1   grid background
+     z=2   vignette
+     z=4   content (panel + header), pointer-events:auto on
+           interactive children only
+     z=20  canvas (robot arm + stamps), pointer-events: none
+           so clicks pass through to the panel beneath
+   
+   Stamping state machine (per click):
+     idle -> pressing (140ms, piston extends, ease-in)
+          -> printing (60ms, full pressure, drop stamp)
+          -> retracting (260ms, piston returns, ease-out)
+          -> idle
+   
+   Stamp pool: ring buffer, max 30 active. Each stamp fades
+   over ~3.5s with cubic ease-out, then is recycled.
+   ============================================================ */
+
+const canvas = document.getElementById('robotCanvas');
+const ctx = canvas.getContext('2d');
+const dpr = window.devicePixelRatio || 1;
+
+let W = 0, H = 0;
+function resize() {
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+resize();
+
+const mouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+
+window.addEventListener('resize', () => { resize(); computeLengths(); });
+window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+window.addEventListener('mousedown', e => triggerStamp(e.clientX, e.clientY));
+window.addEventListener('touchmove', e => {
+  if (e.touches[0]) { mouse.x = e.touches[0].clientX; mouse.y = e.touches[0].clientY; }
+}, { passive: true });
+window.addEventListener('touchstart', e => {
+  if (e.touches[0]) {
+    mouse.x = e.touches[0].clientX;
+    mouse.y = e.touches[0].clientY;
+    triggerStamp(mouse.x, mouse.y);
+  }
+}, { passive: true });
+
+function getBase() {
+  return { x: W * 0.16, y: H - 50 };
+}
+
+let armLengths = [];
+function computeLengths() {
+  const diag = Math.hypot(W, H);
+  const total = diag * 0.55;
+  armLengths = [
+    total * 0.34,
+    total * 0.28,
+    total * 0.18,
+    total * 0.10
+  ];
+}
+computeLengths();
+
+const angles = [-Math.PI / 2, -Math.PI / 3, -Math.PI / 6, 0];
+
+/* ============================================================
+   STAMPING STATE MACHINE
+   ============================================================ */
+const PHASE_IDLE = 0;
+const PHASE_PRESS = 1;
+const PHASE_PRINT = 2;
+const PHASE_RETRACT = 3;
+
+const stampHead = {
+  phase: PHASE_IDLE,
+  phaseStart: 0,
+  pistonExtension: 0,  // 0 = retracted, 1 = fully extended
+  pressureRing: 0,     // shockwave ring opacity 0-1
+  pendingStamp: null,  // {x, y, reachable} - target location for next stamp
+  wasOutOfReach: false // tracks last click reachability for HUD/crosshair feedback
+};
+
+/* ----------------------------------------------------------
+   Reachability test - is target inside annular workspace?
+   - Outer bound: sum of all link lengths
+   - Inner bound: longest link - sum of others (can't fold tighter)
+   Returns { reachable, distance, maxReach, minReach }
+   ---------------------------------------------------------- */
+function checkReach(targetX, targetY) {
+  const base = getBase();
+  const dx = targetX - base.x;
+  const dy = targetY - base.y;
+  const distance = Math.hypot(dx, dy);
+
+  const maxReach = armLengths.reduce((a, b) => a + b, 0);
+  const longest = Math.max(...armLengths);
+  const rest = maxReach - longest;
+  const minReach = Math.max(0, longest - rest);
+
+  // Tolerance: leave 2px breathing room so stamps right at the
+  // edge don't oscillate between reachable/unreachable
+  const reachable = distance <= maxReach - 2 && distance >= minReach;
+  return { reachable, distance, maxReach, minReach };
+}
+
+const PHASE_DURATIONS = {
+  [PHASE_PRESS]: 140,
+  [PHASE_PRINT]: 60,
+  [PHASE_RETRACT]: 260
+};
+
+function triggerStamp(x, y) {
+  // Queue the stamp; only re-trigger if currently idle
+  // (prevents broken animation from rapid clicks)
+  if (stampHead.phase === PHASE_IDLE) {
+    const reach = checkReach(x, y);
+    stampHead.phase = PHASE_PRESS;
+    stampHead.phaseStart = performance.now();
+    // Store both target intent and reachability flag.
+    // If unreachable, actual stamp coords will be resolved
+    // at commit time from current EE position.
+    stampHead.pendingStamp = { x, y, reachable: reach.reachable };
+    stampHead.wasOutOfReach = !reach.reachable;
+  }
+}
+
+function updateStampHead(now) {
+  if (stampHead.phase === PHASE_IDLE) {
+    stampHead.pistonExtension *= 0.85; // settle to 0
+    stampHead.pressureRing *= 0.9;
+    return;
+  }
+
+  const elapsed = now - stampHead.phaseStart;
+  const dur = PHASE_DURATIONS[stampHead.phase];
+  const t = Math.min(elapsed / dur, 1);
+
+  if (stampHead.phase === PHASE_PRESS) {
+    // Ease-in cubic - piston accelerates downward
+    stampHead.pistonExtension = t * t;
+    if (t >= 1) {
+      stampHead.phase = PHASE_PRINT;
+      stampHead.phaseStart = now;
+    }
+  } else if (stampHead.phase === PHASE_PRINT) {
+    // At full extension, drop stamp at peak compression
+    stampHead.pistonExtension = 1;
+    stampHead.pressureRing = 1 - t * 0.3;
+    if (stampHead.pendingStamp && t > 0.2) {
+      // Resolve actual stamp location:
+      // - reachable: stamp at the originally-clicked point
+      // - unreachable: stamp wherever the EE actually is right now
+      //   (the IK solver pushes the arm as far toward the target
+      //   as the kinematic chain allows, then stops)
+      let stampX, stampY;
+      if (stampHead.pendingStamp.reachable) {
+        stampX = stampHead.pendingStamp.x;
+        stampY = stampHead.pendingStamp.y;
+      } else {
+        const pts = forwardKinematics();
+        const ee = pts[pts.length - 1];
+        stampX = ee.x;
+        stampY = ee.y;
+      }
+      commitStamp(stampX, stampY, !stampHead.pendingStamp.reachable);
+      stampHead.pendingStamp = null;
+    }
+    if (t >= 1) {
+      stampHead.phase = PHASE_RETRACT;
+      stampHead.phaseStart = now;
+    }
+  } else if (stampHead.phase === PHASE_RETRACT) {
+    // Ease-out - smooth return
+    const eo = 1 - Math.pow(1 - t, 3);
+    stampHead.pistonExtension = 1 - eo;
+    if (t >= 1) {
+      stampHead.phase = PHASE_IDLE;
+      stampHead.pistonExtension = 0;
+    }
+  }
+}
+
+/* ============================================================
+   STAMP POOL - ring buffer
+   ============================================================ */
+const MAX_STAMPS = 30;
+const STAMP_LIFETIME = 3500; // ms
+const stamps = [];
+
+function commitStamp(x, y, wasUnreachable = false) {
+  const stamp = {
+    x, y,
+    born: performance.now(),
+    rotation: (Math.random() - 0.5) * 0.4, // slight random tilt
+    id: stampCounter++,
+    wasUnreachable // flag for distinct visual styling
+  };
+  stamps.push(stamp);
+  if (stamps.length > MAX_STAMPS) stamps.shift();
+}
+
+let stampCounter = 0;
+
+function drawStamps(now) {
+  for (let i = stamps.length - 1; i >= 0; i--) {
+    const s = stamps[i];
+    const age = (now - s.born) / STAMP_LIFETIME;
+    if (age >= 1) {
+      stamps.splice(i, 1);
+      continue;
+    }
+
+    // Cubic ease-out fade
+    const fade = 1 - Math.pow(age, 0.5);
+
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.rotate(s.rotation);
+    ctx.globalAlpha = fade;
+
+    // Color scheme differs for unreachable stamps:
+    // - reachable: orange (normal stamp at clicked location)
+    // - unreachable: yellow/amber (stamp at arm's reach limit)
+    const mainColor = s.wasUnreachable ? '#ffb800' : '#ff6a00';
+    const accentColor = s.wasUnreachable ? '#ff3a00' : '#ffb800';
+    const fillRGBA = s.wasUnreachable
+      ? 'rgba(255, 184, 0, 0.15)'
+      : 'rgba(255, 106, 0, 0.15)';
+
+    // Outer hexagonal stamp boundary
+    const r = 22;
+    ctx.strokeStyle = mainColor;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2;
+      const px = Math.cos(a) * r;
+      const py = Math.sin(a) * r;
+      if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.stroke();
+
+    // Inner fill - ink blot
+    ctx.fillStyle = fillRGBA;
+    ctx.fill();
+
+    // Center crosshair mark
+    ctx.strokeStyle = accentColor;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-6, 0); ctx.lineTo(-2, 0);
+    ctx.moveTo(2, 0); ctx.lineTo(6, 0);
+    ctx.moveTo(0, -6); ctx.lineTo(0, -2);
+    ctx.moveTo(0, 2); ctx.lineTo(0, 6);
+    ctx.stroke();
+
+    // Center dot
+    ctx.fillStyle = accentColor;
+    ctx.beginPath();
+    ctx.arc(0, 0, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ID label
+    ctx.fillStyle = s.wasUnreachable
+      ? 'rgba(255, 184, 0, 0.85)'
+      : 'rgba(255, 106, 0, 0.8)';
+    ctx.font = '8px JetBrains Mono, monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(`#${String(s.id).padStart(3, '0')}`, r + 4, 3);
+
+    // Timestamp + status label
+    ctx.fillStyle = 'rgba(136, 130, 120, 0.7)';
+    ctx.font = '7px JetBrains Mono, monospace';
+    const ms = Math.floor((now - s.born));
+    ctx.fillText(`T+${String(ms).padStart(4, '0')}ms`, r + 4, 13);
+
+    // Extra label for unreachable stamps
+    if (s.wasUnreachable) {
+      ctx.fillStyle = 'rgba(255, 58, 0, 0.85)';
+      ctx.font = '7px JetBrains Mono, monospace';
+      ctx.fillText('LIMIT', r + 4, 23);
+    }
+
+    // Subtle dashed accent ring
+    ctx.strokeStyle = s.wasUnreachable
+      ? 'rgba(255, 184, 0, 0.4)'
+      : 'rgba(255, 106, 0, 0.35)';
+    ctx.lineWidth = 0.8;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.arc(0, 0, r + 6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.restore();
+  }
+}
+
+/* ============================================================
+   IK
+   ============================================================ */
+function forwardKinematics() {
+  const base = getBase();
+  const pts = [{ x: base.x, y: base.y }];
+  let x = base.x, y = base.y;
+  for (let i = 0; i < angles.length; i++) {
+    x += Math.cos(angles[i]) * armLengths[i];
+    y += Math.sin(angles[i]) * armLengths[i];
+    pts.push({ x, y });
+  }
+  return pts;
+}
+
+function solveIK(targetX, targetY) {
+  const iterations = 8;
+  for (let iter = 0; iter < iterations; iter++) {
+    for (let i = angles.length - 1; i >= 0; i--) {
+      const pts = forwardKinematics();
+      const ee = pts[pts.length - 1];
+      const joint = pts[i];
+
+      const angToEE = Math.atan2(ee.y - joint.y, ee.x - joint.x);
+      const angToTarget = Math.atan2(targetY - joint.y, targetX - joint.x);
+      let delta = angToTarget - angToEE;
+      while (delta > Math.PI) delta -= 2 * Math.PI;
+      while (delta < -Math.PI) delta += 2 * Math.PI;
+      delta *= 0.25;
+
+      for (let j = i; j < angles.length; j++) angles[j] += delta;
+
+      if (i === 0) {
+        const minA = -Math.PI + 0.15;
+        const maxA = -0.15;
+        if (angles[0] < minA) {
+          const diff = minA - angles[0];
+          for (let j = 0; j < angles.length; j++) angles[j] += diff;
+        }
+        if (angles[0] > maxA) {
+          const diff = maxA - angles[0];
+          for (let j = 0; j < angles.length; j++) angles[j] += diff;
+        }
+      }
+    }
+  }
+}
+
+/* ============================================================
+   RENDERING - segments, joints, base
+   ============================================================ */
+
+function drawSegment(x1, y1, x2, y2, thickness, hasStripe) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.hypot(dx, dy);
+  const ang = Math.atan2(dy, dx);
+
+  ctx.save();
+  ctx.translate(x1, y1);
+  ctx.rotate(ang);
+
+  ctx.shadowColor = 'rgba(0,0,0,0.55)';
+  ctx.shadowBlur = 14;
+  ctx.shadowOffsetX = 4;
+  ctx.shadowOffsetY = 5;
+
+  const grad = ctx.createLinearGradient(0, -thickness / 2, 0, thickness / 2);
+  grad.addColorStop(0, '#ff9540');
+  grad.addColorStop(0.25, '#ff6a00');
+  grad.addColorStop(0.5, '#c44300');
+  grad.addColorStop(0.75, '#ff6a00');
+  grad.addColorStop(1, '#6a2400');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, -thickness / 2, len, thickness);
+
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+
+  const hi = ctx.createLinearGradient(0, -thickness / 2, 0, -thickness / 2 + thickness * 0.3);
+  hi.addColorStop(0, 'rgba(255, 230, 200, 0.55)');
+  hi.addColorStop(1, 'rgba(255, 230, 200, 0)');
+  ctx.fillStyle = hi;
+  ctx.fillRect(0, -thickness / 2, len, thickness * 0.3);
+
+  const sh = ctx.createLinearGradient(0, thickness / 2 - thickness * 0.35, 0, thickness / 2);
+  sh.addColorStop(0, 'rgba(0,0,0,0)');
+  sh.addColorStop(1, 'rgba(0,0,0,0.55)');
+  ctx.fillStyle = sh;
+  ctx.fillRect(0, thickness / 2 - thickness * 0.35, len, thickness * 0.35);
+
+  ctx.fillStyle = '#1a1612';
+  ctx.fillRect(len * 0.12, -thickness / 2, 3, thickness);
+  ctx.fillRect(len * 0.88 - 3, -thickness / 2, 3, thickness);
+
+  if (hasStripe) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(len * 0.45, -thickness / 2, thickness * 0.55, thickness);
+    ctx.clip();
+    ctx.fillStyle = '#ffb800';
+    ctx.fillRect(len * 0.45, -thickness / 2, thickness * 0.55, thickness);
+    ctx.fillStyle = '#1a1612';
+    for (let s = -thickness; s < thickness * 2; s += 7) {
+      ctx.beginPath();
+      ctx.moveTo(len * 0.45 + s, -thickness / 2);
+      ctx.lineTo(len * 0.45 + s + 3, -thickness / 2);
+      ctx.lineTo(len * 0.45 + s + 3 - thickness, thickness / 2);
+      ctx.lineTo(len * 0.45 + s - thickness, thickness / 2);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  ctx.strokeStyle = 'rgba(20, 14, 10, 0.85)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(0, -thickness / 2, len, thickness);
+
+  ctx.restore();
+}
+
+function drawJoint(x, y, radius) {
+  ctx.beginPath();
+  ctx.arc(x, y, radius + 3, 0, Math.PI * 2);
+  ctx.fillStyle = '#0f0d0b';
+  ctx.shadowColor = 'rgba(0,0,0,0.7)';
+  ctx.shadowBlur = 10;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  const grad = ctx.createRadialGradient(x - radius * 0.3, y - radius * 0.3, 0, x, y, radius);
+  grad.addColorStop(0, '#e0dad0');
+  grad.addColorStop(0.4, '#9c968e');
+  grad.addColorStop(0.8, '#4a4744');
+  grad.addColorStop(1, '#1f1d1a');
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(x, y, radius * 0.4, 0, Math.PI * 2);
+  ctx.fillStyle = '#14110f';
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(x, y, radius * 0.14, 0, Math.PI * 2);
+  ctx.fillStyle = '#ff6a00';
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(x - radius * 0.35, y - radius * 0.35, radius * 0.18, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.fill();
+}
+
+function drawBase() {
+  const base = getBase();
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.6)';
+  ctx.shadowBlur = 16;
+  ctx.shadowOffsetY = 6;
+
+  const w = 100, h = 16;
+  const grad = ctx.createLinearGradient(0, base.y - h, 0, base.y + h);
+  grad.addColorStop(0, '#5a5754');
+  grad.addColorStop(0.5, '#2a2826');
+  grad.addColorStop(1, '#14110f');
+  ctx.fillStyle = grad;
+  ctx.fillRect(base.x - w / 2, base.y - 2, w, h);
+
+  ctx.shadowColor = 'transparent';
+  ctx.shadowOffsetY = 0;
+
+  ctx.fillStyle = '#1a1612';
+  for (let i = -1; i <= 1; i++) {
+    ctx.beginPath();
+    ctx.arc(base.x + i * 35, base.y + 5, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#555';
+  for (let i = -1; i <= 1; i++) {
+    ctx.beginPath();
+    ctx.arc(base.x + i * 35 - 1, base.y + 4, 1.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(base.x - w / 2, base.y + h - 6, w, 4);
+  ctx.clip();
+  for (let i = base.x - w / 2 - 10; i < base.x + w / 2 + 10; i += 10) {
+    ctx.fillStyle = ((i / 10) | 0) % 2 === 0 ? '#ffb800' : '#1a1612';
+    ctx.fillRect(i, base.y + h - 6, 10, 4);
+  }
+  ctx.restore();
+  ctx.restore();
+}
+
+/* ============================================================
+   STAMPING HEAD - pneumatic press
+   ------------------------------------------------------------
+   Anatomy (along arm axis, +x = forward):
+     - Mounting flange (back, attached to wrist link)
+     - Cylinder body (housing)
+     - Spring coils (visible on side)
+     - Piston rod (extends forward when pressing)
+     - Stamp plate (the flat press surface at front)
+     - Indicator LED (turns red during press)
+   ============================================================ */
+function drawStampHead(x, y, angle, extension) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+
+  // Mounting flange (where it attaches to arm)
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur = 6;
+  ctx.fillStyle = '#3a3734';
+  ctx.fillRect(-12, -14, 6, 28);
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#0a0908';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(-12, -14, 6, 28);
+
+  // Cylinder body (housing)
+  ctx.shadowColor = 'rgba(0,0,0,0.6)';
+  ctx.shadowBlur = 10;
+  const bodyGrad = ctx.createLinearGradient(0, -12, 0, 12);
+  bodyGrad.addColorStop(0, '#7a7570');
+  bodyGrad.addColorStop(0.4, '#3a3734');
+  bodyGrad.addColorStop(0.7, '#2a2826');
+  bodyGrad.addColorStop(1, '#14110f');
+  ctx.fillStyle = bodyGrad;
+  ctx.fillRect(-6, -12, 22, 24);
+  ctx.shadowBlur = 0;
+
+  // Cylinder body specular highlight
+  const cylHi = ctx.createLinearGradient(0, -12, 0, -12 + 6);
+  cylHi.addColorStop(0, 'rgba(220, 215, 205, 0.5)');
+  cylHi.addColorStop(1, 'rgba(220, 215, 205, 0)');
+  ctx.fillStyle = cylHi;
+  ctx.fillRect(-6, -12, 22, 6);
+
+  // Cylinder outline
+  ctx.strokeStyle = '#0a0908';
+  ctx.lineWidth = 1.2;
+  ctx.strokeRect(-6, -12, 22, 24);
+
+  // Pressure indicator LED (top side)
+  const ledColor = stampHead.phase === PHASE_PRESS || stampHead.phase === PHASE_PRINT
+    ? '#ff3a00' : '#440a00';
+  ctx.fillStyle = ledColor;
+  ctx.beginPath();
+  ctx.arc(2, -9, 2, 0, Math.PI * 2);
+  ctx.fill();
+  if (stampHead.phase === PHASE_PRESS || stampHead.phase === PHASE_PRINT) {
+    ctx.shadowColor = '#ff3a00';
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  // Hex bolts on body
+  ctx.fillStyle = '#1a1612';
+  for (const by of [-7, 7]) {
+    for (const bx of [-3, 13]) {
+      ctx.beginPath();
+      ctx.arc(bx, by, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Piston rod extension (forward, +x direction)
+  const maxExt = 18;
+  const ext = extension * maxExt;
+
+  // Spring coils alongside the piston (visible when extended)
+  if (ext > 0.5) {
+    ctx.strokeStyle = '#8a8580';
+    ctx.lineWidth = 1.2;
+    const coils = 6;
+    const springStart = 16;
+    const springEnd = 16 + ext;
+    for (let s = 0; s <= coils; s++) {
+      const t = s / coils;
+      const sx = springStart + (springEnd - springStart) * t;
+      ctx.beginPath();
+      ctx.arc(sx, -8, 1.5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(sx, 8, 1.5, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  // Piston rod (chrome shaft)
+  if (ext > 0) {
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = 6;
+    const rodGrad = ctx.createLinearGradient(0, -3, 0, 3);
+    rodGrad.addColorStop(0, '#f0ebe2');
+    rodGrad.addColorStop(0.5, '#a8a29a');
+    rodGrad.addColorStop(1, '#4a4744');
+    ctx.fillStyle = rodGrad;
+    ctx.fillRect(16, -3, ext, 6);
+    ctx.shadowBlur = 0;
+
+    ctx.strokeStyle = '#0a0908';
+    ctx.lineWidth = 0.8;
+    ctx.strokeRect(16, -3, ext, 6);
+  }
+
+  // Stamp plate (the press surface at the end)
+  const plateX = 16 + ext;
+  ctx.shadowColor = 'rgba(0,0,0,0.7)';
+  ctx.shadowBlur = 8;
+  ctx.fillStyle = '#1a1612';
+  ctx.fillRect(plateX, -9, 5, 18);
+  ctx.shadowBlur = 0;
+
+  // Plate face - the actual stamping surface
+  const plateColor = stampHead.phase === PHASE_PRINT ? '#ffb800' : '#ff6a00';
+  ctx.fillStyle = plateColor;
+  ctx.fillRect(plateX + 3, -9, 2, 18);
+
+  // Plate face glow during print
+  if (stampHead.phase === PHASE_PRINT) {
+    ctx.shadowColor = '#ffb800';
+    ctx.shadowBlur = 12;
+    ctx.fillRect(plateX + 3, -9, 2, 18);
+    ctx.shadowBlur = 0;
+  }
+
+  // Outline plate
+  ctx.strokeStyle = '#0a0908';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(plateX, -9, 5, 18);
+
+  ctx.restore();
+}
+
+/* ============================================================
+   IMPACT EFFECTS - shockwave ring at stamp moment
+   ============================================================ */
+function drawImpactWave(x, y, intensity) {
+  if (intensity < 0.05) return;
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Expanding ring
+  const r = 8 + (1 - intensity) * 30;
+  ctx.strokeStyle = `rgba(255, 184, 0, ${intensity * 0.7})`;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Inner ring
+  const r2 = 4 + (1 - intensity) * 20;
+  ctx.strokeStyle = `rgba(255, 106, 0, ${intensity * 0.5})`;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(0, 0, r2, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+/* ============================================================
+   MAIN LOOP
+   ============================================================ */
+
+const eePosEl = document.getElementById('eePos');
+const gripStateEl = document.getElementById('gripState');
+const stampCountEl = document.getElementById('stampCount');
+
+const PHASE_NAMES = {
+  [PHASE_IDLE]: 'IDLE',
+  [PHASE_PRESS]: 'PRESS',
+  [PHASE_PRINT]: 'PRINT',
+  [PHASE_RETRACT]: 'RETRACT'
+};
+
+function render(now) {
+  if (!now) now = performance.now();
+
+  updateStampHead(now);
+  solveIK(mouse.x, mouse.y);
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Layer 1: stamps drawn first (under everything)
+  drawStamps(now);
+
+  // Layer 2: impact wave at most recent stamp during PRINT phase
+  if (stampHead.phase === PHASE_PRINT && stampHead.pendingStamp === null && stamps.length > 0) {
+    const last = stamps[stamps.length - 1];
+    const elapsedSinceStamp = now - last.born;
+    if (elapsedSinceStamp < 250) {
+      drawImpactWave(last.x, last.y, 1 - elapsedSinceStamp / 250);
+    }
+  }
+
+  // Layer 3: arm
+  const pts = forwardKinematics();
+  drawBase();
+
+  const thicknesses = [34, 26, 20, 14];
+  for (let i = 0; i < pts.length - 1; i++) {
+    drawSegment(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y, thicknesses[i], i === 0);
+  }
+
+  const jointSizes = [22, 17, 13, 10];
+  for (let i = 0; i < pts.length - 1; i++) {
+    drawJoint(pts[i].x, pts[i].y, jointSizes[i]);
+  }
+
+  // Layer 4: stamping head at end-effector
+  const ee = pts[pts.length - 1];
+  const wrist = pts[pts.length - 2];
+  const eeAngle = Math.atan2(ee.y - wrist.y, ee.x - wrist.x);
+  drawStampHead(ee.x, ee.y, eeAngle, stampHead.pistonExtension);
+
+  // Layer 5: target crosshair at mouse - live reachability indicator
+  const liveReach = checkReach(mouse.x, mouse.y);
+  ctx.save();
+  ctx.translate(mouse.x, mouse.y);
+  // Color logic:
+  // - during animation: amber (active)
+  // - hovering reachable point: orange
+  // - hovering unreachable point: red (warning)
+  const ringColor = stampHead.phase !== PHASE_IDLE ? '#ffb800'
+                  : (liveReach.reachable ? '#ff6a00' : '#ff3a00');
+  ctx.strokeStyle = ringColor;
+  ctx.fillStyle = ringColor;
+  ctx.lineWidth = 1;
+  const size = 14, gap = 5;
+  ctx.beginPath();
+  ctx.moveTo(0, -size); ctx.lineTo(0, -gap);
+  ctx.moveTo(0, gap); ctx.lineTo(0, size);
+  ctx.moveTo(-size, 0); ctx.lineTo(-gap, 0);
+  ctx.moveTo(gap, 0); ctx.lineTo(size, 0);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(0, 0, 2, 0, Math.PI * 2);
+  ctx.fill();
+  // Outer ring - dashed when out of reach for distinct feedback
+  if (!liveReach.reachable && stampHead.phase === PHASE_IDLE) {
+    ctx.strokeStyle = 'rgba(255, 58, 0, 0.5)';
+    ctx.setLineDash([4, 3]);
+  } else {
+    ctx.strokeStyle = 'rgba(255, 106, 0, 0.3)';
+  }
+  ctx.beginPath();
+  ctx.arc(0, 0, 20, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Warning label below crosshair when out of reach
+  if (!liveReach.reachable && stampHead.phase === PHASE_IDLE) {
+    ctx.fillStyle = '#ff3a00';
+    ctx.font = '8px JetBrains Mono, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('OUT OF REACH', 0, 34);
+  }
+  ctx.restore();
+
+  // HUD telemetry
+  eePosEl.textContent = `${String(Math.round(ee.x)).padStart(3, '0')}, ${String(Math.round(ee.y)).padStart(3, '0')}`;
+  gripStateEl.textContent = PHASE_NAMES[stampHead.phase];
+  gripStateEl.style.color = stampHead.phase === PHASE_PRINT ? '#ff3a00'
+                          : stampHead.phase === PHASE_IDLE ? '#ffb800' : '#ff9540';
+  stampCountEl.textContent = String(stampCounter).padStart(3, '0');
+
+  requestAnimationFrame(render);
+}
+
+render();
+</script>
+</body>
+</html>
